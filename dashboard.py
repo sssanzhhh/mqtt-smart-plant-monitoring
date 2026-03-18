@@ -286,8 +286,8 @@ def draw_card(surface, rect, plant_id, data, all_alerts, fonts):
     pygame.draw.rect(stripe_s, (r, g, b, 55), (0, 0, w - 4, stripe_h), border_radius=13)
     surface.blit(stripe_s, (x + 2, y + 2))
 
-    draw_text(surface, f"{profile['display_name']} ({plant_id})", f_hdr, C_TITLE, x + 16, y + 12)
-
+    draw_text(surface, profile["display_name"], f_hdr, C_TITLE, x + 16, y + 12)
+    
     status_text = "Healthy" if hcol == C_GREEN else ("Warning" if hcol == C_YELLOW else "Critical")
     draw_text(surface, f"Status: {status_text}", f_lbl, hcol, x + 16, y + 52)
     draw_text(surface, f"Last update: {data.get('timestamp', '—')}", f_tiny, C_LABEL, x + 16, y + 72)
