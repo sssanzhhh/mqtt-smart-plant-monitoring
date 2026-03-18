@@ -1,11 +1,36 @@
-import importlib.util  # for checking if a Python package is installed
-import subprocess      # for launching each service as a separate OS process
-import sys             # for passing the current Python interpreter path
-import time            # for sleep between process health checks
+import importlib.util
+import subprocess
+import sys
+import time
 from pathlib import Path
 
-# Resolve the directory where this script lives so all paths are absolute
 ROOT_DIR = Path(__file__).resolve().parent
+
+PLANT_TYPES = ["ficus", "cactus"]
+
+CONTROLLERS = [
+    "controller_moisture.py",
+    "controller_temp.py",
+    "controller_humidity.py",
+    "controller_nitrogen.py",
+    "controller_phosphorus.py",
+    "controller_potassium.py",
+    "controller_ph.py",
+    "controller_salinity.py",
+    "controller_root_temp.py",
+]
+
+PUBLISHERS = [
+    "publisher_moisture.py",
+    "publisher_temp.py",
+    "publisher_humidity.py",
+    "publisher_nitrogen.py",
+    "publisher_phosphorus.py",
+    "publisher_potassium.py",
+    "publisher_ph.py",
+    "publisher_salinity.py",
+    "publisher_root_temp.py",
+]
 
 
 def check_dependencies():
@@ -25,70 +50,64 @@ def check_dependencies():
 
 
 def start_process(script_name, *args):
-    """
-    Launch a Python script as a subprocess using the current interpreter.
-    Extra positional args (e.g. plant type) are forwarded to the script.
-    """
+    """Launch a Python script as a subprocess using the current interpreter."""
     script_path = ROOT_DIR / script_name
     return subprocess.Popen(
         [sys.executable, str(script_path), *args],
-        cwd=str(ROOT_DIR),  # run from the project root so relative paths work
+        cwd=str(ROOT_DIR),
     )
 
 
 def stop_process(process):
     """Gracefully terminate a subprocess, killing it if it does not stop in time."""
     if process.poll() is not None:
-        return  # process already exited — nothing to do
+        return
 
-    process.terminate()  # send SIGTERM
+    process.terminate()
     try:
-        process.wait(timeout=5)  # wait up to 5 seconds for clean exit
+        process.wait(timeout=5)
     except subprocess.TimeoutExpired:
-        process.kill()  # force kill if it didn't respond to SIGTERM
+        process.kill()
 
 
 def main():
     if not check_dependencies():
-        return 1  # exit early if a required package is missing
+        return 1
 
     print("Starting Smart Plant Monitoring System…")
-    print("Launching: controller | ficus publisher | cactus publisher | dashboard")
+    processes = {}
 
-    # Start the controller first so it's ready before publishers connect
-    controller = start_process("controller.py")
-    time.sleep(1)  # give the controller time to connect to the broker
+    print("\nLaunching controllers...")
+    for script in CONTROLLERS:
+        proc = start_process(script)
+        processes[script] = proc
+        time.sleep(0.2)
 
-    # Start both plant publishers with their type as a CLI argument
-    publisher_ficus  = start_process("publisher.py", "ficus")
-    time.sleep(0.5)  # stagger startup to avoid simultaneous broker connections
-    publisher_cactus = start_process("publisher.py", "cactus")
-    time.sleep(0.5)
+    time.sleep(2)
 
-    # Start the Pygame dashboard last (depends on data already flowing)
+    print("\nLaunching publishers...")
+    for plant_type in PLANT_TYPES:
+        for script in PUBLISHERS:
+            name = f"{script} ({plant_type})"
+            proc = start_process(script, plant_type)
+            processes[name] = proc
+            time.sleep(0.15)
+
+    print("\nLaunching dashboard...")
     dashboard = start_process("dashboard.py")
-
-    # Map process names to their Popen handles for monitoring and cleanup
-    processes = {
-        "controller.py":        controller,
-        "publisher.py(ficus)":  publisher_ficus,
-        "publisher.py(cactus)": publisher_cactus,
-        "dashboard.py":         dashboard,
-    }
+    processes["dashboard.py"] = dashboard
 
     print("\nAll services running. Press Ctrl+C to stop.\n")
 
     try:
         while True:
-            # Poll each process and report if any stopped unexpectedly
             for name, proc in processes.items():
                 if proc.poll() is not None:
                     print(f"{name} stopped unexpectedly.")
-            time.sleep(0.5)  # check every 500 ms
+            time.sleep(0.5)
     except KeyboardInterrupt:
         print("\nStopping all services…")
     finally:
-        # Always stop all subprocesses on exit, even if an error occurred
         for proc in processes.values():
             stop_process(proc)
         print("All stopped.")
