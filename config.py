@@ -71,6 +71,7 @@ PLANT_PROFILES = {
         "root_temperature": (15.0, 35.0),
     },
 }
-
+def build_plant_id(plant_type: str) -> str:
+    return f"plant-{plant_type}-001"
 # Plant type used when no CLI argument is provided
 DEFAULT_PLANT = "ficus"
