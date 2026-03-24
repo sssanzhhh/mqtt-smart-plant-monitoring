@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import random
+import ssl
 import sys
 import time
 
@@ -15,12 +16,13 @@ class SensorPublisher:
         plant_type = plant_type.lower()
         if plant_type not in PLANT_PROFILES:
             raise ValueError(f"Unknown plant type: {plant_type}")
-
         self.plant_type = plant_type
         self.plant_id = build_plant_id(plant_type)
         self.topic = SENSOR_TOPIC.format(plant_id=self.plant_id)
         self.value = random.uniform(55.0, 65.0)
         self.client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
+        self.client.tls_set(tls_version=ssl.PROTOCOL_TLS)
+        self.client.tls_insecure_set(False)
 
     def _next_value(self) -> float:
         self.value += random.uniform(-1.0, 1.0)
@@ -31,7 +33,6 @@ class SensorPublisher:
         self.client.connect(BROKER, PORT)
         self.client.loop_start()
         print(f"[publisher_humidity] topic: {self.topic}")
-
         try:
             while True:
                 payload = {
