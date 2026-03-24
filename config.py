@@ -1,77 +1,91 @@
+# TLS defaults and MQTT client setup live here so every process uses the same
+# certificate configuration.
+from __future__ import annotations
+
+import ssl
+import sys
+from pathlib import Path
+
+try:
+    import certifi
+except ImportError:
+    certifi = None
+
 # ─────────────────────────────────────────────
 #  Plant Monitoring – Central Configuration
 #  All constants and plant profiles live here.
 #  No other file should hardcode these values.
 # ─────────────────────────────────────────────
 
-# MQTT broker address (public HiveMQ broker, no auth required)
 BROKER = "broker.hivemq.com"
-PORT   = 1883  # default unencrypted MQTT port
+PORT   = 8883
 
-# Topic templates — use .format(plant_id=...) before publishing/subscribing
-SENSOR_TOPIC  = "smartplant/{plant_id}/sensor"   # publisher → broker → controller
-COMMAND_TOPIC = "smartplant/{plant_id}/command"  # controller → broker → publisher
-STATUS_TOPIC  = "smartplant/{plant_id}/status"   # publisher → broker (actuator state)
-ALERT_TOPIC   = "smartplant/{plant_id}/alerts"   # controller → broker (severity alerts)
+TLS_CA_CERT     = None
+TLS_CLIENT_CERT = None
+TLS_CLIENT_KEY  = None
 
-# Path to the local SQLite database file
+SENSOR_TOPIC  = "smartplant/{plant_id}/sensor"
+COMMAND_TOPIC = "smartplant/{plant_id}/command"
+STATUS_TOPIC  = "smartplant/{plant_id}/status"
+ALERT_TOPIC   = "smartplant/{plant_id}/alerts"
+
 DB_PATH = "plant_monitoring.db"
 
-# Minimum seconds between two watering commands for the same plant
-# Prevents rapid ON/OFF toggling while moisture stabilises
 COOLDOWN_SECONDS = 20
+PUBLISH_INTERVAL_SECONDS = 3
 
-# ─────────────────────────────────────────────
-#  Plant Profiles
-#  Each key is a plant type identifier string.
-#  Numeric ranges are (min, max) tuples.
-#  Adding a new plant only requires a new entry here.
-# ─────────────────────────────────────────────
 PLANT_PROFILES = {
     "ficus": {
         "display_name": "Ficus",
-
-        # Moisture thresholds (percentage 0–100)
-        "moisture_min":      40.0,   # trigger WATER_ON below this
-        "moisture_stop":     60.0,   # trigger WATER_OFF above this
-        "moisture_warning":  30.0,   # publish WARNING alert below this
-        "moisture_critical": 20.0,   # publish CRITICAL alert below this
-
-        # NPK nutrients in mg/kg — optimal range for ficus
+        "moisture_min":      40.0,
+        "moisture_stop":     60.0,
+        "moisture_warning":  30.0,
+        "moisture_critical": 20.0,
         "nitrogen":    (150, 300),
         "phosphorus":  (50,  150),
         "potassium":   (100, 250),
-
-        # Soil chemistry
-        "soil_ph":  (5.5, 7.0),   # slightly acidic to neutral
-        "salinity": (0.0, 1.5),   # dS/m — ficus is salt-sensitive
-
-        # Root zone temperature in °C
+        "soil_ph":  (5.5, 7.0),
+        "salinity": (0.0, 1.5),
         "root_temperature": (18.0, 28.0),
     },
     "cactus": {
         "display_name": "Cactus",
-
-        # Cactus needs far less water than ficus
         "moisture_min":      15.0,
         "moisture_stop":     25.0,
         "moisture_warning":  10.0,
         "moisture_critical":  5.0,
-
-        # Lower NPK demand — cactus grows slowly
         "nitrogen":   (50,  150),
         "phosphorus": (20,   80),
         "potassium":  (50,  150),
-
-        # Tolerates slightly higher pH and salinity than ficus
         "soil_ph":  (6.0, 7.5),
         "salinity": (0.0, 2.5),
-
-        # Wider temperature tolerance — mimics arid environment
         "root_temperature": (15.0, 35.0),
     },
 }
+
 def build_plant_id(plant_type: str) -> str:
     return f"plant-{plant_type}-001"
-# Plant type used when no CLI argument is provided
+
 DEFAULT_PLANT = "ficus"
+
+
+def configure_mqtt_client_tls(client) -> None:
+    tls_kwargs = {"tls_version": ssl.PROTOCOL_TLS_CLIENT}
+    ca_source = "system defaults"
+
+    if TLS_CA_CERT:
+        tls_kwargs["ca_certs"] = TLS_CA_CERT
+        ca_source = TLS_CA_CERT
+    elif certifi is not None:
+        tls_kwargs["ca_certs"] = certifi.where()
+        ca_source = "certifi"
+
+    if TLS_CLIENT_CERT:
+        tls_kwargs["certfile"] = TLS_CLIENT_CERT
+    if TLS_CLIENT_KEY:
+        tls_kwargs["keyfile"] = TLS_CLIENT_KEY
+
+    client.tls_set(**tls_kwargs)
+    client.tls_insecure_set(False)
+    process_name = Path(sys.argv[0]).name or "process"
+    print(f"[{process_name}] TLS enabled, certificate verification enforced, CA source: {ca_source}")
