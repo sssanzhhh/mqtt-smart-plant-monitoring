@@ -38,6 +38,8 @@ def check_dependencies():
     missing = []
     if importlib.util.find_spec("paho") is None:
         missing.append("paho-mqtt")
+    if importlib.util.find_spec("certifi") is None:
+        missing.append("certifi")
     if importlib.util.find_spec("pygame") is None:
         missing.append("pygame")
 
