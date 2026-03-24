@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import ssl
 import time
 
 import paho.mqtt.client as mqtt
@@ -14,15 +15,15 @@ class SensorController:
         self.alert_type = "HIGH_SALINITY"
         self.topic_sub = SENSOR_TOPIC.replace("{plant_id}", "+")
         self.client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
+        self.client.tls_set(tls_version=ssl.PROTOCOL_TLS)
+        self.client.tls_insecure_set(False)
         self.client.on_message = self.on_message
         self.active_alerts: dict[str, str] = {}
 
     def _publish_alert(self, plant_id: str, plant_type: str, severity: str, value: float, max_allowed: float) -> None:
         if self.active_alerts.get(plant_id) == severity:
             return
-
         self.active_alerts[plant_id] = severity
-
         topic = ALERT_TOPIC.format(plant_id=plant_id)
         payload = {
             "plant_id": plant_id,
@@ -44,26 +45,16 @@ class SensorController:
             payload = json.loads(msg.payload.decode())
         except json.JSONDecodeError:
             return
-
         if self.sensor_key not in payload:
             return
-
         plant_id = payload.get("plant_id", "unknown")
         plant_type = payload.get("plant_type", "ficus")
         profile = PLANT_PROFILES.get(plant_type)
         if profile is None:
             return
-
         value = float(payload[self.sensor_key])
         max_allowed = profile["salinity"][1]
-
-        print(
-            "[controller_salinity]",
-            payload.get("timestamp", time.strftime("%Y-%m-%d %H:%M:%S")),
-            plant_id,
-            f"salinity={value} dS/m",
-        )
-
+        print("[controller_salinity]", payload.get("timestamp", time.strftime("%Y-%m-%d %H:%M:%S")), plant_id, f"salinity={value} dS/m")
         if value > max_allowed:
             severity = "CRITICAL" if value > max_allowed * 1.3 else "WARNING"
             self._publish_alert(plant_id, plant_type, severity, value, max_allowed)
