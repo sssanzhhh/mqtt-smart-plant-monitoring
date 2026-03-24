@@ -1,18 +1,13 @@
 from __future__ import annotations
 
 import json
+import ssl
 import time
 
 import paho.mqtt.client as mqtt
 
 from config import (
-    BROKER,
-    PORT,
-    SENSOR_TOPIC,
-    COMMAND_TOPIC,
-    ALERT_TOPIC,
-    PLANT_PROFILES,
-    COOLDOWN_SECONDS,
+    BROKER, PORT, SENSOR_TOPIC, COMMAND_TOPIC, ALERT_TOPIC, PLANT_PROFILES, COOLDOWN_SECONDS,
 )
 
 
@@ -21,6 +16,8 @@ class SensorController:
         self.sensor_key = "soil_moisture"
         self.topic_sub = SENSOR_TOPIC.replace("{plant_id}", "+")
         self.client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
+        self.client.tls_set(tls_version=ssl.PROTOCOL_TLS)
+        self.client.tls_insecure_set(False)
         self.client.on_message = self.on_message
 
         self.is_watering: dict[str, bool] = {}
@@ -30,7 +27,6 @@ class SensorController:
     def _publish_alert(self, plant_id: str, plant_type: str, severity: str, value: float, message: str) -> None:
         if self.active_alerts.get(plant_id) == severity:
             return
-
         self.active_alerts[plant_id] = severity
         topic = ALERT_TOPIC.format(plant_id=plant_id)
         payload = {
@@ -89,21 +85,9 @@ class SensorController:
         )
 
         if moisture < profile["moisture_critical"] and not watering:
-            self._publish_alert(
-                plant_id,
-                plant_type,
-                "CRITICAL",
-                moisture,
-                f"Soil moisture critically low: {moisture}%",
-            )
+            self._publish_alert(plant_id, plant_type, "CRITICAL", moisture, f"Soil moisture critically low: {moisture}%")
         elif moisture < profile["moisture_warning"] and not watering:
-            self._publish_alert(
-                plant_id,
-                plant_type,
-                "WARNING",
-                moisture,
-                f"Soil moisture low: {moisture}%",
-            )
+            self._publish_alert(plant_id, plant_type, "WARNING", moisture, f"Soil moisture low: {moisture}%")
         else:
             self._clear_alert(plant_id)
 
@@ -113,7 +97,6 @@ class SensorController:
             and (now - self.last_cmd_time.get(plant_id, 0)) >= COOLDOWN_SECONDS
         ):
             self._send_command(plant_id, "WATER_ON", "Soil moisture below threshold")
-
         elif moisture >= profile["moisture_stop"] and watering:
             self._send_command(plant_id, "WATER_OFF", "Soil moisture reached stop level")
 
