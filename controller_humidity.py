@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import ssl
 import time
 
 import paho.mqtt.client as mqtt
@@ -13,6 +14,8 @@ class SensorController:
         self.sensor_key = "humidity"
         self.topic_sub = SENSOR_TOPIC.replace("{plant_id}", "+")
         self.client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
+        self.client.tls_set(tls_version=ssl.PROTOCOL_TLS)
+        self.client.tls_insecure_set(False)
         self.client.on_message = self.on_message
 
     def on_message(self, client: mqtt.Client, userdata, msg: mqtt.MQTTMessage) -> None:
