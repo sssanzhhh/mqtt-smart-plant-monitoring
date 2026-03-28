@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import json
-import ssl
 import time
 
 import paho.mqtt.client as mqtt
 
-from config import ALERT_TOPIC, BROKER, PLANT_PROFILES, PORT, SENSOR_TOPIC
+from config import ALERT_TOPIC, BROKER, PLANT_PROFILES, PORT, SENSOR_TOPIC, configure_mqtt_client_tls
 
 
 class SensorController:
@@ -15,8 +14,7 @@ class SensorController:
         self.alert_type = "ROOT_TEMP_OUT_OF_RANGE"
         self.topic_sub = SENSOR_TOPIC.replace("{plant_id}", "+")
         self.client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
-        self.client.tls_set(tls_version=ssl.PROTOCOL_TLS)
-        self.client.tls_insecure_set(False)
+        configure_mqtt_client_tls(self.client)
         self.client.on_message = self.on_message
         self.active_alerts: dict[str, str] = {}
 
