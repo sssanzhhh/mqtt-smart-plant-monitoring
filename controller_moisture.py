@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import json
-import ssl
 import time
 
 import paho.mqtt.client as mqtt
 
 from config import (
-    BROKER, PORT, SENSOR_TOPIC, COMMAND_TOPIC, ALERT_TOPIC, PLANT_PROFILES, COOLDOWN_SECONDS,
+    ALERT_TOPIC, BROKER, COMMAND_TOPIC, COOLDOWN_SECONDS, PLANT_PROFILES, PORT, SENSOR_TOPIC,
+    configure_mqtt_client_tls,
 )
 
 
@@ -16,8 +16,7 @@ class SensorController:
         self.sensor_key = "soil_moisture"
         self.topic_sub = SENSOR_TOPIC.replace("{plant_id}", "+")
         self.client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
-        self.client.tls_set(tls_version=ssl.PROTOCOL_TLS)
-        self.client.tls_insecure_set(False)
+        configure_mqtt_client_tls(self.client)
         self.client.on_message = self.on_message
 
         self.is_watering: dict[str, bool] = {}
