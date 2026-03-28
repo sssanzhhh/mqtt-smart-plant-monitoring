@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import json
 import random
-import ssl
 import sys
 import time
 
 import paho.mqtt.client as mqtt
 
 from config import (
-    BROKER, DEFAULT_PLANT, PLANT_PROFILES, PORT, SENSOR_TOPIC, COMMAND_TOPIC, STATUS_TOPIC, build_plant_id,
+    BROKER, COMMAND_TOPIC, DEFAULT_PLANT, PLANT_PROFILES, PORT, PUBLISH_INTERVAL_SECONDS,
+    SENSOR_TOPIC, STATUS_TOPIC, build_plant_id, configure_mqtt_client_tls,
 )
 
 
@@ -27,8 +27,7 @@ class SensorPublisher:
         self.value = random.uniform(profile["moisture_min"], profile["moisture_stop"])
         self.watering_active = False
         self.client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
-        self.client.tls_set(tls_version=ssl.PROTOCOL_TLS)
-        self.client.tls_insecure_set(False)
+        configure_mqtt_client_tls(self.client)
         self.client.on_message = self.on_message
 
     def on_message(self, client: mqtt.Client, userdata, msg: mqtt.MQTTMessage) -> None:
@@ -78,7 +77,7 @@ class SensorPublisher:
                 self.client.publish(self.sensor_topic, json.dumps(payload))
                 self.publish_status()
                 print(f"[publisher_moisture] sent: {payload['soil_moisture']}% watering={self.watering_active}")
-                time.sleep(1)
+                time.sleep(PUBLISH_INTERVAL_SECONDS)
         except KeyboardInterrupt:
             print("\n[publisher_moisture] stopped")
         finally:
