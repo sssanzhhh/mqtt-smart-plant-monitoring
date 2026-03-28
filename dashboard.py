@@ -1,13 +1,12 @@
 import json
 import math
-import ssl
 import threading
 import time
 
 import pygame
 import paho.mqtt.client as mqtt
 
-from config import BROKER, PORT, PLANT_PROFILES, build_plant_id
+from config import BROKER, PORT, PLANT_PROFILES, STATUS_TOPIC, build_plant_id, configure_mqtt_client_tls
 
 WIDTH, HEIGHT = 1120, 760
 FPS = 30
@@ -131,9 +130,18 @@ def merge_sensor_payload(payload: dict) -> None:
             state[plant_id][sensor_key] = payload[sensor_key]
 
 
+def merge_status_payload(payload: dict) -> None:
+    plant_id = payload.get("plant_id", "unknown")
+    plant_type = payload.get("plant_type", "ficus")
+    if plant_id not in state:
+        state[plant_id] = {"plant_id": plant_id, "plant_type": plant_type, "timestamp": "—"}
+    state[plant_id]["plant_type"] = plant_type
+    state[plant_id]["watering_active"] = bool(payload.get("watering_active", False))
+    state[plant_id]["status_timestamp"] = payload.get("timestamp", "—")
+
+
 mqtt_client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
-mqtt_client.tls_set(tls_version=ssl.PROTOCOL_TLS)
-mqtt_client.tls_insecure_set(False)
+configure_mqtt_client_tls(mqtt_client)
 
 
 def on_message(client, userdata, msg):
@@ -145,6 +153,8 @@ def on_message(client, userdata, msg):
     with state_lock:
         if msg.topic.endswith("/sensor"):
             merge_sensor_payload(payload)
+        elif msg.topic.endswith("/status"):
+            merge_status_payload(payload)
         elif msg.topic.endswith("/alerts"):
             alerts.insert(0, payload)
             del alerts[20:]
@@ -154,6 +164,7 @@ mqtt_client.on_message = on_message
 mqtt_client.connect(BROKER, PORT)
 mqtt_client.subscribe("smartplant/+/sensor")
 mqtt_client.subscribe("smartplant/+/alerts")
+mqtt_client.subscribe(STATUS_TOPIC.replace("{plant_id}", "+"))
 mqtt_client.loop_start()
 
 
@@ -229,6 +240,10 @@ def draw_card(surface, rect, plant_id, data, all_alerts, fonts):
     pygame.draw.rect(stripe_s, (r, g, b, 55), (0, 0, w - 4, stripe_h), border_radius=13)
     surface.blit(stripe_s, (x + 2, y + 2))
     draw_text(surface, profile["display_name"], f_hdr, C_TITLE, x + 16, y + 12)
+    if data.get("watering_active"):
+        badge_rect = (x + w - 156, y + 12, 132, 26)
+        draw_rounded_rect(surface, C_BLUE_DIM, badge_rect, radius=13, border=1, border_colour=C_BLUE)
+        draw_text(surface, "autowatering", f_tiny, C_BLUE, badge_rect[0] + 12, badge_rect[1] + 6)
     status_text = "Healthy" if hcol == C_GREEN else ("Warning" if hcol == C_YELLOW else "Critical")
     draw_text(surface, f"Status: {status_text}", f_lbl, hcol, x + 16, y + 52)
     draw_text(surface, f"Last update: {data.get('timestamp', '—')}", f_tiny, C_LABEL, x + 16, y + 72)
