@@ -280,41 +280,45 @@ def main():
     f_tiny = pygame.font.SysFont("segoeui", FONT_TINY)
     tick = 0
     running = True
-    while running:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-        screen.fill(C_BG)
-        draw_topbar(screen, f_title, f_lbl, tick)
-        with state_lock:
-            snap_state = dict(state)
-            snap_alerts = list(alerts)
-        plant_ids = sorted(snap_state.keys())
-        if not plant_ids:
-            plant_ids = [build_plant_id(ptype) for ptype in PLANT_PROFILES.keys()]
-        content_top = TOPBAR_H + 14
-        content_bottom = HEIGHT - BOTTOM_H - 12
-        content_h = content_bottom - content_top
-        cols = 2
-        rows = max(1, math.ceil(len(plant_ids) / cols))
-        card_w = (WIDTH - PADDING * (cols + 1)) // cols
-        card_h = max(240, (content_h - PADDING * (rows - 1)) // rows)
-        for idx, plant_id in enumerate(plant_ids):
-            col = idx % cols
-            row = idx // cols
-            x = PADDING + col * (card_w + PADDING)
-            y = content_top + row * (card_h + PADDING)
-            data = snap_state.get(plant_id)
-            if not data:
-                continue
-            draw_card(screen, (x, y, card_w, card_h), plant_id, data, snap_alerts, (f_hdr, f_lbl, f_tiny))
-        draw_alert_feed(screen, f_tiny, snap_alerts)
-        pygame.display.flip()
-        clock.tick(FPS)
-        tick += 1
-    pygame.quit()
-    mqtt_client.loop_stop()
-    mqtt_client.disconnect()
+    try:
+        while running:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+            screen.fill(C_BG)
+            draw_topbar(screen, f_title, f_lbl, tick)
+            with state_lock:
+                snap_state = dict(state)
+                snap_alerts = list(alerts)
+            plant_ids = sorted(snap_state.keys())
+            if not plant_ids:
+                plant_ids = [build_plant_id(ptype) for ptype in PLANT_PROFILES.keys()]
+            content_top = TOPBAR_H + 14
+            content_bottom = HEIGHT - BOTTOM_H - 12
+            content_h = content_bottom - content_top
+            cols = 2
+            rows = max(1, math.ceil(len(plant_ids) / cols))
+            card_w = (WIDTH - PADDING * (cols + 1)) // cols
+            card_h = max(240, (content_h - PADDING * (rows - 1)) // rows)
+            for idx, plant_id in enumerate(plant_ids):
+                col = idx % cols
+                row = idx // cols
+                x = PADDING + col * (card_w + PADDING)
+                y = content_top + row * (card_h + PADDING)
+                data = snap_state.get(plant_id)
+                if not data:
+                    continue
+                draw_card(screen, (x, y, card_w, card_h), plant_id, data, snap_alerts, (f_hdr, f_lbl, f_tiny))
+            draw_alert_feed(screen, f_tiny, snap_alerts)
+            pygame.display.flip()
+            clock.tick(FPS)
+            tick += 1
+    except KeyboardInterrupt:
+        pass
+    finally:
+        pygame.quit()
+        mqtt_client.loop_stop()
+        mqtt_client.disconnect()
 
 
 if __name__ == "__main__":
